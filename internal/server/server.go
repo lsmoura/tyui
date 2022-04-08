@@ -14,16 +14,18 @@ import (
 )
 
 type Server struct {
-	db     *database.DB
-	Logger zerolog.Logger
-	m      *manager.Manager
+	db      *database.DB
+	Logger  zerolog.Logger
+	m       *manager.Manager
+	version string
 }
 
-func New(db *database.DB, logger zerolog.Logger) *Server {
+func New(version string, db *database.DB, logger zerolog.Logger) *Server {
 	return &Server{
-		db:     db,
-		Logger: logger,
-		m:      manager.New(db),
+		db:      db,
+		Logger:  logger,
+		m:       manager.New(db),
+		version: version,
 	}
 }
 
@@ -40,17 +42,24 @@ func (s Server) Start(ctx context.Context, port int) error {
 		fmt.Fprintf(w, "ok")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("tyui-version", s.version)
+
 		infoRequest := false
 		token := r.URL.Path
-		for token[len(token)-1] == '/' {
+		for len(token) > 0 && token[len(token)-1] == '/' {
 			token = token[:len(token)-1]
 		}
-		for token[0] == '/' {
+		for len(token) > 0 && token[0] == '/' {
 			token = token[1:]
 		}
-		if token[len(token)-1] == '+' {
+		if len(token) > 0 && token[len(token)-1] == '+' {
 			infoRequest = true
 			token = token[:len(token)-1]
+		}
+
+		if token == "" {
+			fmt.Fprintf(w, "hi there")
+			return
 		}
 
 		link, err := s.m.LinkWithToken(r.Context(), token)

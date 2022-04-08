@@ -22,6 +22,10 @@ const (
 	envPort = "PORT"
 )
 
+var (
+	version = "dev"
+)
+
 func dbConfig() (database.Params, error) {
 	var dbParams database.Params
 	var err error
@@ -95,7 +99,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("env.Int")
 	}
-	s := server.New(db, logger)
+	s := server.New(version, db, logger)
 	if err := s.Start(ctx, port); err != nil {
 		logger.Fatal().Err(err).Msg("server.Start")
 	}
