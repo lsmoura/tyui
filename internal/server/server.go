@@ -90,8 +90,8 @@ func (s Server) Start(ctx context.Context, port int) error {
 			return
 		}
 
-		w.WriteHeader(http.StatusPermanentRedirect)
 		w.Header().Set("Location", link.URL)
+		w.WriteHeader(http.StatusPermanentRedirect)
 		fmt.Fprintf(w, link.URL)
 		return
 	})
