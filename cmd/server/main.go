@@ -91,7 +91,7 @@ func main() {
 	defer cancel()
 	go signalListen(cancel)
 
-	port, err := env.Int(envPort, 13000)
+	port, err := env.Int(envPort, 3000)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("env.Int")
 	}
