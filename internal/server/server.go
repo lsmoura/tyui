@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/lsmoura/tyui/internal/model"
 	"github.com/lsmoura/tyui/pkg/database"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -18,9 +20,6 @@ type Server struct {
 
 func (s Server) Start(ctx context.Context, port int) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "tyui.me")
-	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.DB.Ping(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -30,6 +29,65 @@ func (s Server) Start(ctx context.Context, port int) error {
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "ok")
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		infoRequest := false
+		token := r.URL.Path
+		for token[len(token)-1] == '/' {
+			token = token[:len(token)-1]
+		}
+		for token[0] == '/' {
+			token = token[1:]
+		}
+		if token[len(token)-1] == '+' {
+			infoRequest = true
+			token = token[:len(token)-1]
+		}
+
+		var link model.Links
+		rows, err := s.DB.QueryContext(r.Context(), "SELECT id, token, url, created_at, clicks FROM links WHERE token = $1", token)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("error querying database")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Database is not available")
+			return
+		}
+		defer rows.Close()
+		if rows.Next() {
+			if err := rows.Scan(&link.ID, &link.Token, &link.URL, &link.CreatedAt, &link.Clicks); err != nil {
+				s.Logger.Error().Err(err).Msg("error scanning database")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "Database is not available")
+				return
+			}
+		}
+
+		if link.ID == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "Not found")
+			return
+		}
+
+		if infoRequest {
+			fmt.Printf("info for %s\n", token)
+
+			data, err := json.Marshal(link)
+			if err != nil {
+				s.Logger.Error().Err(err).Msg("error marshalling json")
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "internal error")
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(data)
+			return
+		}
+
+		w.WriteHeader(http.StatusPermanentRedirect)
+		w.Header().Set("Location", link.URL)
+		fmt.Fprintf(w, link.URL)
+		return
 	})
 
 	if ctx == nil {
