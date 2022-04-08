@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/lsmoura/tyui/internal/model"
+	"github.com/lsmoura/tyui/internal/manager"
 	"github.com/lsmoura/tyui/pkg/database"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -14,14 +14,23 @@ import (
 )
 
 type Server struct {
-	DB     *database.DB
+	db     *database.DB
 	Logger zerolog.Logger
+	m      *manager.Manager
+}
+
+func New(db *database.DB, logger zerolog.Logger) *Server {
+	return &Server{
+		db:     db,
+		Logger: logger,
+		m:      manager.New(db),
+	}
 }
 
 func (s Server) Start(ctx context.Context, port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.DB.Ping(); err != nil {
+		if err := s.db.Ping(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			fmt.Fprintf(w, "Database is not available")
 			return
@@ -44,22 +53,12 @@ func (s Server) Start(ctx context.Context, port int) error {
 			token = token[:len(token)-1]
 		}
 
-		var link model.Links
-		rows, err := s.DB.QueryContext(r.Context(), "SELECT id, token, url, created_at, clicks FROM links WHERE token = $1", token)
+		link, err := s.m.LinkWithToken(r.Context(), token)
 		if err != nil {
-			s.Logger.Error().Err(err).Msg("error querying database")
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Database is not available")
+			s.Logger.Error().Err(err).Str("token", token).Msg("error getting link")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "Link not found")
 			return
-		}
-		defer rows.Close()
-		if rows.Next() {
-			if err := rows.Scan(&link.ID, &link.Token, &link.URL, &link.CreatedAt, &link.Clicks); err != nil {
-				s.Logger.Error().Err(err).Msg("error scanning database")
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintf(w, "Database is not available")
-				return
-			}
 		}
 
 		if link.ID == 0 {
@@ -69,8 +68,6 @@ func (s Server) Start(ctx context.Context, port int) error {
 		}
 
 		if infoRequest {
-			fmt.Printf("info for %s\n", token)
-
 			data, err := json.Marshal(link)
 			if err != nil {
 				s.Logger.Error().Err(err).Msg("error marshalling json")

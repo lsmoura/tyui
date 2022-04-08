@@ -95,10 +95,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("env.Int")
 	}
-	s := server.Server{
-		DB:     db,
-		Logger: logger,
-	}
+	s := server.New(db, logger)
 	if err := s.Start(ctx, port); err != nil {
 		logger.Fatal().Err(err).Msg("server.Start")
 	}
