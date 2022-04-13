@@ -41,6 +41,9 @@ func (s Server) Start(ctx context.Context, port int) error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "ok")
 	})
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("tyui-version", s.version)
 
